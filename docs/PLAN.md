@@ -5,31 +5,43 @@
 - **Clinic** is the top-level entity. All data (patients, appointments, reminders) belongs to a clinic.
 - **Users** are members of a clinic with a role (admin, receptionist, doctor). A solo dentist is just a clinic with one member.
 - **Postgres is the source of truth** for everything — clinics, users, patients, appointments, reminders.
-- **Google Calendar is a helper**, not a sync source. The app pushes events to Google Calendar so doctors and patients get calendar notifications. There is no sync-back. One-time import is available to help new clinics bootstrap data.
+- **Google Calendar is a helper**, not a sync source. Appointments are added to Google Calendar via "Add to Google Calendar" links — no OAuth tokens stored. One-time import (OAuth, read events, discard tokens immediately) is available to help new clinics bootstrap data.
 - **Background scheduler** (APScheduler) auto-sends WhatsApp reminders daily — no manual trigger needed.
 - **Frontend** is server-rendered HTML (Jinja2 + HTMX + Alpine.js), served directly by Flask.
 
-### Google Calendar role — push only
+### Google Calendar role — links only, no stored tokens
 
 ```
-User creates/edits/cancels appointment in DentaRemind
+User creates an appointment in DentaRemind
   → Saved to Postgres (source of truth)
-  → Event pushed to doctor's Google Calendar (best effort, fire-and-forget)
+  → App generates an "Add to Google Calendar" link
+  → Doctor/patient clicks the link → event added to their own Google Calendar
+  → No OAuth, no API call, no tokens stored
 
 One-time import (onboarding only):
-  → Pull existing events from Google Calendar
-  → Create appointments + stub patients in Postgres
-  → After import, Postgres is the truth — no further sync from Google
+  → User grants OAuth access (read-only, calendar.readonly scope)
+  → App reads existing events, creates appointments + stub patients in Postgres
+  → Tokens discarded immediately after import completes
+  → After import, Postgres is the truth — no further connection to Google
 ```
+
+"Add to Google Calendar" links are plain URLs of the form:
+```
+https://calendar.google.com/calendar/render?action=TEMPLATE
+  &text=Appointment+at+Clínica+Rodríguez
+  &dates=20250502T090000/20250502T100000
+  &details=Notes+here
+```
+No auth required. Works for any Google account.
 
 ### Entity hierarchy
 
 ```
 Clinic
   ├── Members (users with roles: admin | receptionist | doctor)
-  │     └── Google Account (doctors connect their own, used for calendar push)
   ├── Patients (shared pool — belong to the clinic, not a specific doctor)
   └── Appointments (linked to a patient + optionally a doctor)
+        └── "Add to Google Calendar" link (generated on the fly, no auth)
 ```
 
 ### Roles
@@ -52,9 +64,8 @@ Clinic
 | Migrations | Alembic | Schema versioning |
 | Database | PostgreSQL | Source of truth |
 | Auth | Flask-Login + bcrypt | Session-based auth, no overengineering |
-| OAuth tokens | google-auth-oauthlib | Handles token refresh automatically |
-| Token encryption | cryptography (Fernet) | Refresh tokens encrypted at rest in Postgres |
-| Google Calendar | google-api-python-client | Push events only |
+| Google Calendar (ongoing) | "Add to Google Calendar" links | No OAuth, no tokens, just a URL |
+| Google Calendar (import) | google-auth-oauthlib + google-api-python-client | OAuth used once, tokens discarded after import |
 | Scheduler | APScheduler | Runs inside Flask, cron-style jobs |
 | Frontend | HTMX + Alpine.js + Jinja2 | Server-rendered, minimal JS, no build step |
 | Hosting | TBD (Railway / Render / Fly.io) | |
@@ -65,17 +76,17 @@ Clinic
 
 Flask already serves HTML pages via Jinja2. HTMX lets you make those pages dynamic (partial updates, form submissions, modals) by returning HTML fragments from Flask routes — no JSON API layer, no frontend build step, no two codebases to maintain. Alpine.js handles small interactive bits (dropdowns, toggles). Fast to build, easy to debug.
 
-### OAuth token storage
+### Google Calendar — no token storage needed
 
+For day-to-day use, appointments are shared via a plain "Add to Google Calendar" URL — no OAuth, no API calls, no tokens.
+
+For the one-time onboarding import:
 ```
-Google OAuth flow → receive access_token + refresh_token
-  ↓
-Encrypt refresh_token with Fernet (key stored in env var, never in DB)
-  ↓
-Store encrypted refresh_token in Postgres (google_accounts table)
-  ↓
-At runtime: decrypt → pass to google-auth-oauthlib → it fetches a fresh
-access_token automatically when needed. Access token never stored.
+User clicks "Import from Google Calendar"
+  → OAuth consent screen (read-only scope: calendar.readonly)
+  → App reads events, creates appointments + patients in Postgres
+  → access_token and refresh_token discarded immediately
+  → Import complete — no Google credentials stored anywhere
 ```
 
 ---
@@ -125,13 +136,15 @@ Riskiest and most valuable pieces first; auth wraps around what already works.
 - [ ] User profile page (name, email, change password)
 
 ### M6 — Google Calendar integration
-- [ ] Google OAuth2 flow per doctor (scoped to their clinic)
-- [ ] Encrypt and store refresh token (Fernet)
-- [ ] One-time import: pull existing calendar events → create appointments + stub patients
-- [ ] Review queue: flag stub patients for the admin to complete
-- [ ] Push new/edited/cancelled appointments to Google Calendar (best effort)
-- [ ] Re-auth flow when refresh token expires or is revoked
-- [ ] Settings: connect/disconnect Google account, pick which calendar to push to
+- [ ] Generate "Add to Google Calendar" link for every appointment (no auth required)
+  - Link shown on appointment detail page and in reminder messages
+- [ ] One-time import flow (onboarding):
+  - [ ] OAuth consent (read-only scope: `calendar.readonly`)
+  - [ ] Fetch events from selected calendar
+  - [ ] Match events to existing patients by name/phone; create stubs for unmatched
+  - [ ] Create appointments in Postgres
+  - [ ] Discard tokens immediately after import — nothing stored
+- [ ] Review queue: flag stub patients created during import for admin to complete
 
 ### M7 — Polish & edge cases
 - [ ] Twilio integration for automatic WhatsApp sends (upgrade from `wa.me` links)
@@ -158,19 +171,11 @@ clinic_members
 clinic_invites
   id, clinic_id, email, role, token, accepted_at, expires_at
 
-google_accounts
-  id, user_id, clinic_id, google_email, refresh_token_encrypted, connected_at
-  -- no access_token stored; fetched at runtime via refresh token
-
-calendars
-  id, google_account_id, google_calendar_id, name, is_push_target
-
 patients
   id, clinic_id, name, phone, notes, is_stub, created_at, updated_at
 
 appointments
   id, clinic_id, patient_id, doctor_user_id,
-  google_calendar_id, google_event_id,       -- null if not pushed yet
   start_at, end_at,
   status (pending | confirmed | cancelled),
   notes, created_at
