@@ -27,9 +27,9 @@ Small-to-medium dental clinics with:
 
 ## What We Are Building
 
-DentaRemind is an appointment reminder and confirmation tracking tool for dental clinics.
+DentaRemind is an appointment scheduling, reminder, and confirmation tracking tool for dental clinics.
 
-It automatically sends WhatsApp reminders to patients the day before their appointment, then tracks whether each patient confirmed, cancelled, or went silent — so staff can act on what actually needs attention instead of manually chasing every patient.
+Staff schedule appointments directly in DentaRemind — it is the single source of truth for the clinic's calendar. It then automatically sends WhatsApp reminders to patients the day before their appointment and tracks whether each patient confirmed, cancelled, or went silent — so staff can focus on what actually needs attention instead of manually chasing every patient.
 
 ### Core goals
 
@@ -40,7 +40,6 @@ It automatically sends WhatsApp reminders to patients the day before their appoi
 
 ### What it is not
 
-- It is not a scheduling or booking tool — appointments are managed within DentaRemind or imported from an existing source
 - It is not a billing or payment system
 - It is not a patient health records system
 
