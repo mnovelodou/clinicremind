@@ -1,4 +1,4 @@
-# DentaRemind — Implementation Plan
+# ClinicRemind — Implementation Plan
 
 ## Architecture Overview
 
@@ -12,7 +12,7 @@
 ### Google Calendar role — links only, no stored tokens
 
 ```
-User creates an appointment in DentaRemind
+User creates an appointment in ClinicRemind
   → Saved to Postgres (source of truth)
   → App generates an "Add to Google Calendar" link
   → Doctor/patient clicks the link → event added to their own Google Calendar

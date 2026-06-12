@@ -1,8 +1,8 @@
-# DentaRemind — Problem Statement
+# ClinicRemind — Problem Statement
 
 ## The Problem
 
-Dental clinics lose revenue every day from **no-shows** — patients who miss their appointment without notice. The root cause is almost always the same: the patient simply forgot.
+Clinics lose revenue every day from **no-shows** — patients who miss their appointment without notice. The root cause is almost always the same: the patient simply forgot.
 
 Clinic staff know this, and they try to fix it manually by calling or messaging patients the day before. But this process is:
 
@@ -17,7 +17,7 @@ The result is a full schedule on paper that becomes a half-empty waiting room in
 
 ## Who This Is For
 
-Small-to-medium dental clinics with:
+Small-to-medium clinics (dental, medical, veterinary, physiotherapy, and similar) with:
 
 - **One or more doctors** sharing a clinic (each with their own appointment schedule)
 - **A receptionist or clinic staff member** who manages bookings and communications
@@ -27,9 +27,9 @@ Small-to-medium dental clinics with:
 
 ## What We Are Building
 
-DentaRemind is an appointment scheduling, reminder, and confirmation tracking tool for dental clinics.
+ClinicRemind is an appointment scheduling, reminder, and confirmation tracking tool for clinics.
 
-Staff schedule appointments directly in DentaRemind — it is the single source of truth for the clinic's calendar. It then automatically sends WhatsApp reminders to patients the day before their appointment and tracks whether each patient confirmed, cancelled, or went silent — so staff can focus on what actually needs attention instead of manually chasing every patient.
+Staff schedule appointments directly in ClinicRemind — it is the single source of truth for the clinic's calendar. It then automatically sends WhatsApp reminders to patients the day before their appointment and tracks whether each patient confirmed, cancelled, or went silent — so staff can focus on what actually needs attention instead of manually chasing every patient.
 
 ### Core goals
 
@@ -47,7 +47,7 @@ Staff schedule appointments directly in DentaRemind — it is the single source 
 
 ## The Outcome
 
-A clinic using DentaRemind should see:
+A clinic using ClinicRemind should see:
 
 - Fewer no-shows because patients are reliably reminded
 - Less time spent by staff on manual follow-up calls and messages
