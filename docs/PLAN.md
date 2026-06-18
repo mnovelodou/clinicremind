@@ -1,56 +1,75 @@
 # ClinicRemind — Implementation Plan
 
+## Scope of this plan
+
+This plan is **appointments-first**. The original concept led with automated
+WhatsApp reminders; based on how the clinic actually works, we are reordering:
+the front-desk scheduling experience comes first, and automation/calendar
+integration is deferred to a second iteration.
+
+- **Iteration 1** — run the front desk: multi-doctor calendars, patient lookup,
+  scheduling lifecycle (confirm / cancel / reschedule / no-show), and sending an
+  appointment as an **ICS file by email**. No WhatsApp, no automated reminders,
+  no Google Calendar.
+- **Iteration 2** — automation: WhatsApp follow-ups, automated reminders, and
+  Google Calendar integration (including availability validation when booking).
+
+---
+
 ## Architecture Overview
 
-- **Clinic** is the top-level entity. All data (patients, appointments, reminders) belongs to a clinic.
-- **Users** are members of a clinic with a role (admin, receptionist, doctor). A solo dentist is just a clinic with one member.
-- **Postgres is the source of truth** for everything — clinics, users, patients, appointments, reminders.
-- **Google Calendar is a helper**, not a sync source. Appointments are added to Google Calendar via "Add to Google Calendar" links — no OAuth tokens stored. One-time import (OAuth, read events, discard tokens immediately) is available to help new clinics bootstrap data.
-- **Background scheduler** (APScheduler) auto-sends WhatsApp reminders daily — no manual trigger needed.
-- **Frontend** is server-rendered HTML (Jinja2 + HTMX + Alpine.js), served directly by Flask.
-
-### Google Calendar role — links only, no stored tokens
-
-```
-User creates an appointment in ClinicRemind
-  → Saved to Postgres (source of truth)
-  → App generates an "Add to Google Calendar" link
-  → Doctor/patient clicks the link → event added to their own Google Calendar
-  → No OAuth, no API call, no tokens stored
-
-One-time import (onboarding only):
-  → User grants OAuth access (read-only, calendar.readonly scope)
-  → App reads existing events, creates appointments + stub patients in Postgres
-  → Tokens discarded immediately after import completes
-  → After import, Postgres is the truth — no further connection to Google
-```
-
-"Add to Google Calendar" links are plain URLs of the form:
-```
-https://calendar.google.com/calendar/render?action=TEMPLATE
-  &text=Appointment+at+Clínica+Rodríguez
-  &dates=20250502T090000/20250502T100000
-  &details=Notes+here
-```
-No auth required. Works for any Google account.
+- **Clinic** is the top-level entity. All data (patients, appointments) belongs
+  to a clinic.
+- **Postgres is the single source of truth.**
+- **Users vs. doctors are distinct.** A *user* is a login (super admin / admin /
+  receptionist / doctor). A *doctor* is a calendar owner that may or may not have
+  a login. One user can be both an admin and a doctor.
+- **Patients are clinic-wide contact records** — name, phone, email, notes. No
+  clinical/medical records are stored. A patient can have appointments with any
+  doctor; the receptionist books with whichever doctor and sees that doctor's
+  next available slot. There is no per-doctor duplication of patients.
+- **Frontend** is server-rendered HTML (Jinja2 + HTMX + Alpine.js), served
+  directly by Flask. No build step.
 
 ### Entity hierarchy
 
 ```
 Clinic
-  ├── Members (users with roles: admin | receptionist | doctor)
-  ├── Patients (shared pool — belong to the clinic, not a specific doctor)
-  └── Appointments (linked to a patient + optionally a doctor)
-        └── "Add to Google Calendar" link (generated on the fly, no auth)
+  ├── Users (logins; roles: super_admin | admin | receptionist | doctor)
+  ├── Doctors (calendar owners; optionally linked to a user)
+  ├── Patients (clinic-wide contact records — no clinical data)
+  ├── Appointments (patient + doctor + time + status)
+  └── Doctor→Receptionist grants (who a receptionist is allowed to work for)
 ```
 
-### Roles
+---
 
-| Role | Can do |
+## Roles & Data Visibility
+
+| Role | Visibility |
 |---|---|
-| **Admin / Owner** | Everything — settings, manage members, manage all appointments |
-| **Receptionist** | Manage all appointments and patients, no settings |
-| **Doctor** | View/manage their own appointments; optionally view others |
+| **Super Admin** (support / me) | All clinics, all data. Operates above the clinic boundary. |
+| **Admin** | All data within their clinic. Can also be a doctor (own calendar). Manages doctors, receptionists, settings, and grants. |
+| **Doctor** | Own calendar and own patients only — cannot see other doctors' data. Can grant/revoke receptionist access to their own data. |
+| **Receptionist** | Only the data of doctors who currently **grant** them access. No grants = sees nothing. Can do all front-desk actions for granted doctors. |
+
+### Receptionist access grants
+
+A receptionist is **not** automatically clinic-wide. A doctor (for their own
+data) **or** an admin (on any doctor's behalf) must grant access first. A
+receptionist's effective scope = appointments + patients of the doctors who
+currently grant them.
+
+```
+doctor_receptionist_grants
+  id, clinic_id, doctor_id, receptionist_user_id, granted_at, revoked_at
+```
+
+### A doctor's view of patients
+
+A doctor sees only the patients they have appointments with. This is **derived
+from appointments**, not from ownership — no `owner_doctor_id` needed.
+Receptionists and admins see the relevant clinic-wide patient list.
 
 ---
 
@@ -59,100 +78,148 @@ Clinic
 | Layer | Choice | Notes |
 |---|---|---|
 | Language | Python 3.12 | |
-| Web framework | Flask | Simple, fast to build, serves pages + API routes |
-| ORM | SQLAlchemy | Industry standard |
-| Migrations | Alembic | Schema versioning |
+| Web framework | Flask | Serves pages + routes |
+| ORM | SQLAlchemy | |
+| Migrations | Alembic | |
 | Database | PostgreSQL | Source of truth |
-| Auth | Flask-Login + bcrypt | Session-based auth, no overengineering |
-| Google Calendar (ongoing) | "Add to Google Calendar" links | No OAuth, no tokens, just a URL |
-| Google Calendar (import) | google-auth-oauthlib + google-api-python-client | OAuth used once, tokens discarded after import |
-| Scheduler | APScheduler | Runs inside Flask, cron-style jobs |
-| Frontend | HTMX + Alpine.js + Jinja2 | Server-rendered, minimal JS, no build step |
+| Auth | Flask-Login + bcrypt | Session-based |
+| Frontend | HTMX + Alpine.js + Jinja2 | Server-rendered, no build step |
+| Email / ICS | SMTP or provider (Resend / SES) + `ics` lib | Iteration 1 outbound channel |
+| Scheduler | APScheduler | Iteration 2 (reminders) |
+| WhatsApp | `wa.me` links → Twilio | Iteration 2 |
+| Google Calendar | "Add to Calendar" links + OAuth import | Iteration 2 |
 | Hosting | TBD (Railway / Render / Fly.io) | |
-| WhatsApp (v1) | `wa.me` links | Manual send, free |
-| WhatsApp (v2) | Twilio API | Automatic send, upgrade path |
-
-### Why HTMX + Alpine.js over a JS framework
-
-Flask already serves HTML pages via Jinja2. HTMX lets you make those pages dynamic (partial updates, form submissions, modals) by returning HTML fragments from Flask routes — no JSON API layer, no frontend build step, no two codebases to maintain. Alpine.js handles small interactive bits (dropdowns, toggles). Fast to build, easy to debug.
-
-### Google Calendar — no token storage needed
-
-For day-to-day use, appointments are shared via a plain "Add to Google Calendar" URL — no OAuth, no API calls, no tokens.
-
-For the one-time onboarding import:
-```
-User clicks "Import from Google Calendar"
-  → OAuth consent screen (read-only scope: calendar.readonly)
-  → App reads events, creates appointments + patients in Postgres
-  → access_token and refresh_token discarded immediately
-  → Import complete — no Google credentials stored anywhere
-```
 
 ---
 
-## Build Order
+## Task Tracks & Dependencies
 
-Build vertically — each milestone is a working slice from DB → backend → UI.
-Riskiest and most valuable pieces first; auth wraps around what already works.
+The work is grouped into **tracks**. The diagram below shows sequence and what
+can run in parallel — it is a dependency map, not a timeline.
 
-### M1 — Core data model
-- [ ] Set up Flask project structure, SQLAlchemy, Alembic
+```mermaid
+graph TD
+  subgraph Foundation
+    F[F. Project skeleton<br/>Flask + SQLAlchemy + Alembic]
+    D[D. Data model + migrations<br/>clinics, users, doctors,<br/>patients, appointments, grants]
+    S[S. Seed script<br/>sample clinic & data]
+  end
+
+  subgraph "Iteration 1 — Front desk"
+    P[P. Patients<br/>search by name/phone,<br/>create/edit, detail]
+    C[C. Doctors & calendars<br/>per-doctor + combined views]
+    A[A. Appointments<br/>create, daily list,<br/>confirm/cancel/reschedule/no-show,<br/>next appt by patient]
+    I[I. ICS email<br/>generate .ics, send by email]
+    AU[AU. Auth & roles<br/>login, 4 roles, grants,<br/>route guards, scoping]
+  end
+
+  subgraph "Iteration 2 — Automation"
+    R[R. Reminder engine<br/>APScheduler, templates,<br/>confirmation tracking]
+    W[W. WhatsApp follow-ups<br/>wa.me then Twilio]
+    G[G. Google Calendar<br/>add-to-calendar links,<br/>availability check, import]
+  end
+
+  F --> D --> S
+  D --> P
+  D --> C
+  P --> A
+  C --> A
+  A --> I
+  D --> AU
+  AU -.scopes.-> A
+  AU -.scopes.-> P
+  AU -.scopes.-> C
+
+  A --> R
+  A --> W
+  R --> W
+  C --> G
+  A --> G
+```
+
+### How to read it
+
+- **Foundation must finish first** (F → D → S). Everything depends on the data
+  model.
+- Once the model exists, **Patients (P)** and **Doctors/calendars (C)** can be
+  built **in parallel** — they don't depend on each other.
+- **Appointments (A)** needs both P and C (you book a patient with a doctor).
+- **ICS email (I)** depends only on appointments existing.
+- **Auth (AU)** can be developed **in parallel** with P/C/A right after the data
+  model, then *wraps around* the front-desk routes to enforce role scoping
+  (dashed lines). Practical approach: build features against a hardcoded clinic
+  context, then layer auth + scoping on top.
+- **Iteration 2** all hangs off a working appointments core. Reminders (R) and
+  WhatsApp (W) build on appointments; Google Calendar (G) builds on appointments
+  + calendars. R and G can proceed in parallel; W's automatic-send mode builds on
+  R.
+
+### Suggested order of attack
+
+1. **F → D → S** (foundation) — sequential, do first.
+2. **P and C in parallel**, with **AU** started alongside.
+3. **A** once P and C land.
+4. **I** and finishing **AU scoping** — can overlap.
+5. Iteration 2: **R** and **G** in parallel, then **W**.
+
+---
+
+## Build Order (task checklist)
+
+### Foundation
+- [ ] Flask project structure, SQLAlchemy, Alembic
 - [ ] Define and migrate all tables (see schema below)
-- [ ] Seed script with sample clinic, patients, appointments
-- [ ] No auth yet — hardcode a single clinic context for development
+- [ ] Seed script: sample clinic, doctors, patients, appointments
+- [ ] Hardcoded single-clinic context for early development (auth added later)
 
-### M2 — Appointments (the core of the product)
-- [ ] Appointment list (day view, filterable by date and doctor)
-- [ ] Create appointment (pick patient, doctor, date/time, notes)
-- [ ] Edit / cancel appointment
-- [ ] Status field: `pending | confirmed | cancelled`
-- [ ] Patient picker with inline "create new patient" if not found
+### P — Patients
+- [ ] Patient model: name, phone(s), email, notes (clinic-wide, no clinical data)
+- [ ] Search by name or phone (partial match, normalized phone digits)
+- [ ] Create / edit patient
+- [ ] Patient detail page with appointment history
+- [ ] **Find next appointment(s) by patient — independent of doctor**
 
-### M3 — Patient management
-- [ ] Patient list (search by name or phone)
-- [ ] Create / edit patient (name, phone, notes)
-- [ ] Patient detail: appointment history
+### C — Doctors & calendars
+- [ ] Doctor entity (optionally linked to a user login)
+- [ ] Per-doctor day / week calendar view
+- [ ] Combined "all doctors" view
+- [ ] Filter appointment views by doctor
 
-### M4 — Reminder engine
-- [ ] Reminder message template per clinic (variables: `{name}`, `{date}`, `{time}`, `{notes}`)
-- [ ] Clinic-level send time config (respects clinic timezone)
-- [ ] APScheduler cron job: daily, per clinic, find next-day `pending` appointments → send reminders
-- [ ] WhatsApp v1: generate `wa.me` pre-filled links, open in new tab (manual send)
-- [ ] Track reminder state per appointment: `not_sent | sent | confirmed | cancelled`
-- [ ] Guard: skip if appointment already confirmed or reminder sent recently
-- [ ] Dashboard: tomorrow's appointments with reminder status at a glance
-- [ ] Reminders screen: monitoring view — see what was sent, manually trigger if needed
-- [ ] Follow-up screen: cancelled + no-reply list with direct WhatsApp links
+### A — Appointments (core)
+- [ ] Create appointment: pick patient (inline "new patient"), doctor, date/time,
+      duration, notes
+- [ ] Daily appointment list (next days, filterable by date + doctor)
+- [ ] Status lifecycle: `pending | confirmed | cancelled | no_show`
+- [ ] Actions: confirm / cancel / reschedule / mark no-show
+- [ ] Reschedule keeps a record of the change
 
-### M5 — Auth & multi-user
-- [ ] User signup → creates a clinic + adds them as admin
-- [ ] User login (email + password)
-- [ ] Session management (Flask-Login)
-- [ ] All existing routes protected, scoped to the logged-in user's clinic
-- [ ] Invite members by email (assign role on invite)
-- [ ] Accept invite flow (register → land inside the clinic)
-- [ ] Clinic settings page (name, phone, timezone, reminder schedule, template)
-- [ ] User profile page (name, email, change password)
+### I — ICS email
+- [ ] Generate a valid `.ics` VEVENT from an appointment
+- [ ] Send email with the ICS attached (SMTP or provider)
+- [ ] Manual "email this appointment" action; optional auto-send on create/reschedule
+- [ ] Email template (clinic, doctor, date/time, location, notes)
 
-### M6 — Google Calendar integration
-- [ ] Generate "Add to Google Calendar" link for every appointment (no auth required)
-  - Link shown on appointment detail page and in reminder messages
-- [ ] One-time import flow (onboarding):
-  - [ ] OAuth consent (read-only scope: `calendar.readonly`)
-  - [ ] Fetch events from selected calendar
-  - [ ] Match events to existing patients by name/phone; create stubs for unmatched
-  - [ ] Create appointments in Postgres
-  - [ ] Discard tokens immediately after import — nothing stored
-- [ ] Review queue: flag stub patients created during import for admin to complete
+### AU — Auth & roles
+- [ ] Login (Flask-Login + bcrypt), session management
+- [ ] Roles: `super_admin | admin | receptionist | doctor`; a user may hold more
+      than one role and may also be linked to a doctor entity
+- [ ] Route guards: doctor-management + settings restricted to admin/super admin
+- [ ] Data scoping per role (doctor = own data; receptionist = granted doctors;
+      admin = clinic; super admin = all clinics)
+- [ ] Doctor→Receptionist grant management (grantable by the doctor or an admin)
+- [ ] Seed an initial admin; admin creates other accounts (email-invite flow
+      deferred to iteration 2)
+- [ ] Super Admin clinic-switching / impersonation context
 
-### M7 — Polish & edge cases
-- [ ] Twilio integration for automatic WhatsApp sends (upgrade from `wa.me` links)
-- [ ] Timezone handling per clinic
-- [ ] Audit log: reminders sent, by whom, when
-- [ ] Rate limiting on reminder sends
-- [ ] Handle Google Calendar push failures gracefully (log, don't crash)
-- [ ] Email fallback if WhatsApp not configured
+### Iteration 2
+- [ ] **R — Reminder engine**: APScheduler daily job, per-clinic send time +
+      template, per-appointment reminder/confirmation state
+- [ ] **W — WhatsApp**: `wa.me` manual links first, then Twilio automatic sends
+- [ ] **G — Google Calendar**: "Add to Google Calendar" links; availability /
+      free-busy check when booking; one-time onboarding import (OAuth read-only,
+      tokens discarded after import)
+- [ ] Dashboard: tomorrow's appointments + confirmation status
+- [ ] Follow-up view: cancellations + non-responders
 
 ---
 
@@ -160,37 +227,57 @@ Riskiest and most valuable pieces first; auth wraps around what already works.
 
 ```
 clinics
-  id, name, phone, timezone, reminder_send_time, reminder_template, created_at
+  id, name, phone, timezone, created_at
 
 users
-  id, email, password_hash, name, created_at
+  id, email, password_hash, name, is_super_admin, created_at
 
 clinic_members
   id, clinic_id, user_id, role (admin | receptionist | doctor)
+  -- a user may have more than one membership row per clinic
 
-clinic_invites
-  id, clinic_id, email, role, token, accepted_at, expires_at
+doctors
+  id, clinic_id, user_id (nullable), name, created_at
+  -- calendar owner; user_id links to a login when the doctor has one
+
+doctor_receptionist_grants
+  id, clinic_id, doctor_id, receptionist_user_id, granted_at, revoked_at
 
 patients
-  id, clinic_id, name, phone, notes, is_stub, created_at, updated_at
+  id, clinic_id, name, phone, email, notes, created_at, updated_at
+  -- clinic-wide contact record; no clinical data
 
 appointments
-  id, clinic_id, patient_id, doctor_user_id,
+  id, clinic_id, patient_id, doctor_id,
   start_at, end_at,
-  status (pending | confirmed | cancelled),
-  notes, created_at
+  status (pending | confirmed | cancelled | no_show),
+  notes, created_at, updated_at
 
+-- Iteration 2
 reminders
-  id, appointment_id, sent_at, status (not_sent | sent | confirmed | cancelled),
-  method (wa_link | twilio), message_body
+  id, appointment_id, sent_at, status, method (wa_link | twilio), message_body
 ```
 
 ---
 
+## Resolved Decisions
+
+- **Scope reorder** — front-desk scheduling first; WhatsApp / reminders / Google
+  Calendar deferred to iteration 2.
+- **No clinical records** — patients are contact records only.
+- **Patients are clinic-wide** — no per-doctor duplication; a doctor's view is
+  derived from their appointments.
+- **Four roles** — super admin, admin, receptionist, doctor; users can hold
+  multiple roles and an admin can also be a doctor.
+- **Receptionist access is grant-based** — granted by the doctor or an admin.
+- **ICS by email** is the iteration-1 outbound channel.
+
 ## Open Questions
 
-1. Should a doctor be able to belong to more than one clinic? (e.g. works at two locations)
-2. One-time Google Calendar import: auto-create stub patients, or hold in a review queue before creating appointments?
-3. WhatsApp v1 (`wa.me` links) requires someone to manually tap "Send" on their phone — is that acceptable for the first version?
-4. Should reminders be configurable per doctor (send time, template), or always clinic-wide?
-5. Patient confirmation: is a WhatsApp reply the only channel, or do we also want a confirmation link (e.g. SMS / email)?
+1. Phone storage — normalize to E.164 for reliable search across formats?
+2. Double-booking — should v1 prevent booking a doctor into an occupied slot, or
+   just warn?
+3. Reschedule history — full audit trail of moves, or just keep the latest time +
+   an `updated_at`?
+4. Should a doctor be able to belong to more than one clinic (works at two
+   locations)?
