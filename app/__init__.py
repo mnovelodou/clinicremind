@@ -30,6 +30,9 @@ def create_app(config_override: Optional[Mapping[str, Any]] = None) -> Flask:
 
     db.init_app(app)
 
+    # Import models so every table is registered on db.metadata.
+    from . import models  # noqa: F401
+
     from .routes import bp as routes_bp
 
     app.register_blueprint(routes_bp)

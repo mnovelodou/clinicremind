@@ -36,7 +36,8 @@ integration is deferred to a second iteration.
 ```
 Clinic
   ├── Users (logins; roles: super_admin | admin | receptionist | doctor)
-  ├── Doctors (calendar owners; optionally linked to a user)
+  ├── Doctors (calendar owners; global identity, optionally linked to a user;
+  │            linked to clinics they work at via clinic_doctors)
   ├── Patients (clinic-wide contact records — no clinical data)
   ├── Appointments (patient + doctor + time + status)
   └── Doctor→Receptionist grants (who a receptionist is allowed to work for)
@@ -227,7 +228,9 @@ graph TD
 
 ```
 clinics
-  id, name, phone, timezone, created_at
+  id, name, phone, timezone, default_country, created_at
+  -- default_country: ISO 3166-1 alpha-2 (e.g. MX); default country code for
+  --   normalizing patient phones entered without a leading +
 
 users
   id, email, password_hash, name, is_super_admin, created_at
@@ -237,21 +240,33 @@ clinic_members
   -- a user may have more than one membership row per clinic
 
 doctors
-  id, clinic_id, user_id (nullable), name, created_at
-  -- calendar owner; user_id links to a login when the doctor has one
+  id, user_id (nullable), name, created_at
+  -- calendar owner (global identity); user_id links to a login when the doctor
+  -- has one. A doctor may work at multiple clinics — see clinic_doctors.
+
+clinic_doctors
+  id, clinic_id, doctor_id, created_at
+  -- which clinics a doctor works at; unique on (clinic_id, doctor_id)
 
 doctor_receptionist_grants
   id, clinic_id, doctor_id, receptionist_user_id, granted_at, revoked_at
 
 patients
-  id, clinic_id, name, phone, email, notes, created_at, updated_at
+  id, clinic_id, name, country_code, phone_national, email, notes,
+  created_at, updated_at
   -- clinic-wide contact record; no clinical data
+  -- country_code: numeric dialing code, digits only (e.g. 52)
+  -- phone_national: national significant number, digits only (e.g. 5512345678)
+  --   — the searchable column; the canonical E.164 (+525512345678) is
+  --   reconstructed from country_code + phone_national, not stored
+  -- name: searchable by substring via a pg_trgm GIN index (e.g. "novelo")
 
 appointments
   id, clinic_id, patient_id, doctor_id,
   start_at, end_at,
-  status (pending | confirmed | cancelled | no_show),
+  status (pending | confirmed | rescheduled | cancelled | no_show),
   notes, created_at, updated_at
+  -- rescheduled: time was moved to a replacement appointment
 
 -- Iteration 2
 reminders
@@ -274,10 +289,15 @@ reminders
 
 ## Open Questions
 
-1. Phone storage — normalize to E.164 for reliable search across formats?
+1. ~~Phone storage~~ **Resolved** — store `country_code` + `phone_national`
+   (both digits only) and reconstruct the canonical E.164 on demand; search on
+   `phone_national`; numbers without a `+` default to the clinic's
+   `default_country`. Name is searchable by substring via a pg_trgm GIN index.
 2. Double-booking — should v1 prevent booking a doctor into an occupied slot, or
    just warn?
-3. Reschedule history — full audit trail of moves, or just keep the latest time +
-   an `updated_at`?
-4. Should a doctor be able to belong to more than one clinic (works at two
-   locations)?
+3. ~~Reschedule history~~ **Resolved (partial)** — a moved appointment is marked
+   `rescheduled` and a replacement appointment is created, preserving the
+   original. (A full audit table can be revisited if richer history is needed.)
+4. ~~Should a doctor be able to belong to more than one clinic?~~ **Resolved** —
+   yes. Doctors are global identities; the clinics they work at are recorded in
+   `clinic_doctors` (a doctor works one clinic at a time but can work at many).

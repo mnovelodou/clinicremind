@@ -1,0 +1,29 @@
+# Local Postgres for development and integration tests.
+#
+#   docker compose up -d db      # start
+#   docker compose down          # stop (keeps data in the named volume)
+#   docker compose down -v       # stop and wipe data
+#
+# Creates two databases on first boot: `clinicremind` (development, matches
+# .env.example) and `clinicremind_test` (used by integration tests so they
+# never touch development data). See docker/initdb/.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: clinicremind
+      POSTGRES_PASSWORD: clinicremind
+      POSTGRES_DB: clinicremind
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clinicremind"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pgdata:
