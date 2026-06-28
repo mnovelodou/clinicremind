@@ -16,7 +16,7 @@ from __future__ import annotations
 import os
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from app import create_app
@@ -65,6 +65,10 @@ def pg_engine():
         engine.connect().close()
     except Exception as exc:  # pragma: no cover - environment dependent
         pytest.skip(f"Postgres not reachable: {exc}")
+    # The trigram GIN index on patients.name needs this extension (the migration
+    # installs it too; create_all does not run that step).
+    with engine.begin() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
     db.metadata.drop_all(engine)
     db.metadata.create_all(engine)
     yield engine

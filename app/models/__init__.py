@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from .appointment import Appointment, AppointmentStatus
 from .clinic import Clinic
+from .clinic_doctor import ClinicDoctor
 from .doctor import Doctor
 from .grant import DoctorReceptionistGrant
 from .membership import ClinicMember, MemberRole
@@ -23,6 +24,7 @@ __all__ = [
     "Appointment",
     "AppointmentStatus",
     "Clinic",
+    "ClinicDoctor",
     "ClinicMember",
     "Doctor",
     "DoctorReceptionistGrant",

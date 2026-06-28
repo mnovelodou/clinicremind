@@ -55,25 +55,36 @@ migration must `create_type`/`drop_type` the enum on up/down. Alternative — a
 it is the boolean `users.is_super_admin` (super admin operates above the clinic
 boundary, per PLAN.md). A user may have multiple `clinic_members` rows.
 
-**Patient phone — store E.164 canonical plus a searchable national number.**
-Decision: `patients` carries two columns — `phone` (canonical **E.164**, with
-country code, e.g. `+5215512345678`) and `phone_national` (the national
-significant number, digits only, no country/trunk prefix, e.g. `5512345678`).
-The front desk routinely searches by the local number without typing a country
-code, so `phone_national` is the column indexed and matched for search; `phone`
-is the canonical value used for display, ICS, and (iteration 2) WhatsApp.
+**Patient phone — store the parts, reconstruct the whole.** Decision: `patients`
+carries `country_code` (numeric dialing code, digits only, e.g. `52`) and
+`phone_national` (national significant number, digits only, e.g. `5512345678`).
+The canonical E.164 value is **not** a stored column — it is reconstructed when
+needed as `"+" + country_code + phone_national` (a `Patient.phone_e164`
+property). This avoids storing redundant, potentially-divergent data: the parts
+are the source of truth. `phone_national` is the column indexed and matched for
+search, so the front desk can find a patient by local number without typing a
+country code.
 
 **Country-code resolution defaults to the clinic.** A number entered with a
 leading `+` is parsed as-is. A number entered without `+` is interpreted using
 the clinic's default country: `clinics.default_country` (ISO 3166-1 alpha-2,
 e.g. `MX`). So a bare `5512345678` typed at a Mexican clinic resolves to
-`+525512345678`. This is why D1 adds `default_country` to `clinics`.
+country_code `52` + national `5512345678`. This is why D1 adds `default_country`
+to `clinics`.
 
 The parsing/normalization logic (likely the `phonenumbers` library) is
-implemented in P1/P2; D1 only provides the three columns
-(`clinics.default_country`, `patients.phone`, `patients.phone_national`) and the
-index on `(clinic_id, phone_national)`. Storing both columns is a deliberate,
-small denormalization to keep search fast and country-code-agnostic.
+implemented in P1/P2; D1 only provides the columns
+(`clinics.default_country`, `patients.country_code`, `patients.phone_national`)
+and the index on `(clinic_id, phone_national)`.
+
+**Name search by substring — trigram GIN index.** The front desk searches by any
+fragment of a name (e.g. "novelo" must match "Jose Miguel Novelo Vargas"), which
+a plain B-tree index cannot serve for infix `ILIKE '%…%'`. Decision: a
+`pg_trgm` GIN index on `patients.name` (`gin_trgm_ops`) so substring search stays
+index-backed; the clinic scope is applied as a separate `clinic_id = ?` filter.
+The migration installs the `pg_trgm` extension (`CREATE EXTENSION IF NOT
+EXISTS`). Alternative — a full-text `tsvector` — rejected because it tokenizes on
+word boundaries and would miss partial-token matches like "nov".
 
 **Grant lifecycle — soft state via `revoked_at NULL`.** An active grant has
 `revoked_at IS NULL`; revoking sets the timestamp rather than deleting the row,
@@ -81,11 +92,21 @@ preserving history. A partial unique index on
 `(doctor_id, receptionist_user_id) WHERE revoked_at IS NULL` prevents duplicate
 active grants.
 
+**Doctors are global identities; clinic membership is a join table.** A doctor
+may work at several clinics (one at a time), so `doctors` does **not** carry a
+`clinic_id`. Instead `clinic_doctors (clinic_id, doctor_id)` records which
+clinics a doctor works at, with a unique constraint on the pair. Appointments and
+grants still carry both `clinic_id` and `doctor_id` to pin the clinic context of
+each row. This resolves PLAN.md Open Question #4. Alternative — duplicate the
+doctor per clinic — rejected because it splits one person's identity and
+calendar across rows.
+
 **Indexes** — add indexes that the known iteration-1 queries need:
 `appointments(clinic_id, doctor_id, start_at)` for calendar/day views,
 `appointments(patient_id, start_at)` for patient history / next appointment,
-`patients(clinic_id, phone_national)` and `patients(clinic_id, name)` for
-search, plus FKs. Every clinic-scoped table carries `clinic_id` with a FK to `clinics`.
+`patients(clinic_id, phone_national)` and the `pg_trgm` GIN index on
+`patients(name)` for search, plus FKs. Clinic-scoped tables carry `clinic_id`
+with a FK to `clinics`.
 
 **Timestamps** — `created_at`/`updated_at` as timezone-aware `TIMESTAMP WITH
 TIME ZONE`, server-default `now()`; `updated_at` maintained via SQLAlchemy
@@ -101,8 +122,12 @@ rendering.
 - **Native Postgres enums are awkward to alter later** → adding a status value
   needs `ALTER TYPE`. Acceptable: the four appointment statuses and three roles
   are stable per PLAN.md's resolved decisions.
-- **Committing to phone normalization now** → if normalization proves lossy for
-  display, a later additive column is needed. Low risk, additive only.
+- **Storing phone as parts, not E.164** → callers must reconstruct via the
+  `phone_e164` property rather than reading a column. Mitigation: the property is
+  the single reconstruction point; the parts can't drift out of sync.
+- **`pg_trgm` is a Postgres extension** → the test schema (built from metadata,
+  not the migration) must also install it. Mitigation: the integration fixture
+  runs `CREATE EXTENSION IF NOT EXISTS pg_trgm` before `create_all`.
 - **No DB-level guard against double-booking** (PLAN.md Open Question #2 is
   unresolved) → intentionally not enforced in D1; left to the A track. No schema
   constraint added so future policy stays open.
@@ -111,16 +136,17 @@ rendering.
 
 1. Add models under `app/models/`; import the package from `migrations/env.py`.
 2. Create revision `0002_data_model` with `down_revision = "0001_baseline"`.
-3. `upgrade()`: create enum types, then tables (parents before children:
-   clinics → users → clinic_members → doctors → patients →
-   doctor_receptionist_grants → appointments), then indexes.
-4. `downgrade()`: drop in reverse order, then drop the enum types.
+3. `upgrade()`: install `pg_trgm`, create tables (parents before children:
+   clinics → users → clinic_members → doctors → patients → appointments →
+   clinic_doctors → doctor_receptionist_grants) — enum types are auto-created by
+   their first table — then indexes.
+4. `downgrade()`: drop in reverse order, then drop the enum types (the `pg_trgm`
+   extension is intentionally left installed).
 5. Verify with `alembic upgrade head` then `alembic downgrade base` on a scratch
    DB to confirm both directions are clean.
 
 ## Open Questions
 
-- PLAN.md Open Question #4 (a doctor belonging to multiple clinics) is left as
-  designed: `doctors.clinic_id` is single-valued (one clinic per doctor row).
-  Revisit only if multi-location support is prioritized; would be an additive
-  change.
+- None outstanding for D1. Multi-clinic doctors (former Open Question #4) are now
+  modeled via `clinic_doctors`. Double-booking policy (Open Question #2) remains
+  intentionally unconstrained at the schema level, deferred to the A track.

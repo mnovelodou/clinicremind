@@ -1,4 +1,10 @@
-"""Doctor — a calendar owner, optionally linked to a user login."""
+"""Doctor — a calendar owner, optionally linked to a user login.
+
+A doctor is a global identity, not bound to a single clinic: the same doctor may
+work at several clinics (one at a time). Which clinics a doctor works at is
+recorded in ``clinic_doctors`` (see ``ClinicDoctor``). Appointments and grants
+still carry both ``clinic_id`` and ``doctor_id`` to pin the clinic context.
+"""
 
 from __future__ import annotations
 
@@ -14,9 +20,6 @@ class Doctor(db.Model):
     __tablename__ = "doctors"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    clinic_id: Mapped[int] = mapped_column(
-        ForeignKey("clinics.id"), nullable=False, index=True
-    )
     # Nullable: a doctor may be a calendar owner without a login.
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
