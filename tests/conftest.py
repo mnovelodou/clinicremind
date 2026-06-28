@@ -77,6 +77,25 @@ def pg_engine():
 
 
 @pytest.fixture
+def pg_app(pg_engine):
+    """A Flask app bound to the real Postgres test database.
+
+    Use for tests that exercise the app↔database path for real (e.g. the health
+    check's ``SELECT 1``). Depends on ``pg_engine`` so it inherits the
+    skip-if-unreachable behaviour.
+    """
+    app = create_app(config_override={"SQLALCHEMY_DATABASE_URI": TEST_DATABASE_URL})
+    with app.app_context():
+        yield app
+        db.session.remove()
+
+
+@pytest.fixture
+def pg_client(pg_app):
+    return pg_app.test_client()
+
+
+@pytest.fixture
 def db_session(pg_engine):
     """A transactional session rolled back after each test for isolation."""
     conn = pg_engine.connect()
