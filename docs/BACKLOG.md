@@ -9,8 +9,8 @@ details live in [PLAN.md](PLAN.md).
 
 | ID | Task | Track | Depends on | Status | Spec |
 |----|------|-------|-----------|--------|------|
-| F1 | Flask + SQLAlchemy + Alembic skeleton | Foundation | — | done | [openspec](../openspec/changes/f1-flask-skeleton/) |
-| D1 | Define & migrate all tables (clinics, users, clinic_members, doctors, doctor_receptionist_grants, patients, appointments) | Foundation | F1 | done | [openspec](../openspec/changes/d1-data-model/) |
+| F1 | Flask + SQLAlchemy + Alembic skeleton | Foundation | — | done | [openspec](../openspec/changes/archive/2026-06-19-f1-flask-skeleton/) |
+| D1 | Define & migrate all tables (clinics, users, clinic_members, doctors, doctor_receptionist_grants, patients, appointments) | Foundation | F1 | done | [openspec](../openspec/changes/archive/2026-06-28-d1-data-model/) |
 | S1 | Seed script: sample clinic, doctors, patients, appointments | Foundation | D1 | todo | |
 | P1 | Patient model + create/edit | Patients | D1 | todo | |
 | P2 | Patient search by name / phone (normalized) | Patients | P1 | todo | |
