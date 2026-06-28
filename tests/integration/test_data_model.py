@@ -24,9 +24,6 @@ from app.models import (
     User,
 )
 
-# Every test in this module needs a real Postgres.
-pytestmark = pytest.mark.integration
-
 
 def _clinic(session) -> Clinic:
     c = Clinic(name="Test Clinic", timezone="America/Mexico_City", default_country="MX")

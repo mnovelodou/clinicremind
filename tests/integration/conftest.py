@@ -1,23 +1,21 @@
-"""Shared pytest fixtures.
+"""Fixtures for integration tests — backed by a real Postgres.
 
-Two flavours of test live in this suite:
-
-* **Unit** tests use the ``app``/``client`` fixtures below, backed by an
-  in-memory SQLite database — fast, no external services.
-* **Integration** tests (marked ``@pytest.mark.integration``) use the
-  ``pg_engine``/``db_session`` fixtures, backed by a real Postgres, because they
-  assert database-level guarantees (native enums, partial indexes, foreign
-  keys) that SQLite does not honour. Start one with ``docker compose up -d db``.
-  These tests skip cleanly when no Postgres is reachable.
+Integration tests assert behaviour that only a real database provides (native
+enums, partial indexes, foreign keys, a live ``SELECT``), so SQLite or a mock
+would prove nothing. Start a database with ``docker compose up -d db``; these
+tests skip cleanly when none is reachable.
 """
 
 from __future__ import annotations
 
 import os
+import pathlib
 
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
+
+_HERE = pathlib.Path(__file__).parent
 
 from app import create_app
 from app.extensions import db
@@ -30,25 +28,15 @@ TEST_DATABASE_URL = os.environ.get(
     "postgresql+psycopg://clinicremind:clinicremind@localhost:5432/clinicremind_test",
 )
 
+def pytest_collection_modifyitems(items):
+    """Mark tests under tests/integration/ as integration.
 
-# --- Unit-test fixtures (SQLite) -------------------------------------------
-
-
-@pytest.fixture
-def app():
-    """A Flask app bound to an in-memory SQLite database for fast tests."""
-    app = create_app(config_override={"SQLALCHEMY_DATABASE_URI": "sqlite://"})
-    with app.app_context():
-        yield app
-        db.session.remove()
-
-
-@pytest.fixture
-def client(app):
-    return app.test_client()
-
-
-# --- Integration-test fixtures (Postgres) ----------------------------------
+    A subdirectory conftest's hook still receives every collected item, so we
+    filter to those whose file lives under this directory.
+    """
+    for item in items:
+        if _HERE in pathlib.Path(str(item.fspath)).parents:
+            item.add_marker(pytest.mark.integration)
 
 
 @pytest.fixture(scope="session")
@@ -77,6 +65,22 @@ def pg_engine():
 
 
 @pytest.fixture
+def db_session(pg_engine):
+    """A transactional session rolled back after each test for isolation."""
+    conn = pg_engine.connect()
+    txn = conn.begin()
+    session = Session(bind=conn)
+    try:
+        yield session
+    finally:
+        session.close()
+        # A failed flush may have already rolled the transaction back.
+        if txn.is_active:
+            txn.rollback()
+        conn.close()
+
+
+@pytest.fixture
 def pg_app(pg_engine):
     """A Flask app bound to the real Postgres test database.
 
@@ -93,19 +97,3 @@ def pg_app(pg_engine):
 @pytest.fixture
 def pg_client(pg_app):
     return pg_app.test_client()
-
-
-@pytest.fixture
-def db_session(pg_engine):
-    """A transactional session rolled back after each test for isolation."""
-    conn = pg_engine.connect()
-    txn = conn.begin()
-    session = Session(bind=conn)
-    try:
-        yield session
-    finally:
-        session.close()
-        # A failed flush may have already rolled the transaction back.
-        if txn.is_active:
-            txn.rollback()
-        conn.close()

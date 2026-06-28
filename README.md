@@ -51,16 +51,18 @@ also wipe the data volume).
 
 ## Tests
 
-The suite has two layers:
+The suite is split into two trees that never mix:
 
-* **Unit tests** — backed by in-memory SQLite, no external services.
-* **Integration tests** (`@pytest.mark.integration`) — backed by a real
-  Postgres, because they assert database-level guarantees (native enums,
-  partial indexes, foreign keys) that SQLite does not enforce. They read
-  `TEST_DATABASE_URL` and **skip** if no database is reachable.
+* **`tests/unit/`** — pure unit tests. No database connection of any kind; the
+  factory tests mock `db.init_app`. Fast, no external services.
+* **`tests/integration/`** — backed by a real Postgres, because they assert
+  database-level guarantees (native enums, partial indexes, foreign keys, a
+  live `SELECT`) that SQLite or a mock cannot. They read `TEST_DATABASE_URL`
+  and **skip** if no database is reachable. Everything here is auto-marked
+  `integration`.
 
 ```bash
-pytest                          # everything (integration tests skip if no DB)
-pytest -m "not integration"     # unit tests only — fast, no database
-docker compose up -d db && pytest   # run the full suite, integration included
+pytest tests/unit                   # unit only — fast, no database
+docker compose up -d db && pytest   # full suite, integration included
+pytest -m "not integration"         # unit only, by marker
 ```
