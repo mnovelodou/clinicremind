@@ -1,3 +1,8 @@
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+# Fail if a test uses an unregistered marker (catches typos like @pytest.mark.integraton).
+addopts = "--strict-markers"
+markers = [
+    "integration: test that requires a real Postgres database (skips if unreachable)",
+]

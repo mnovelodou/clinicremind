@@ -227,7 +227,9 @@ graph TD
 
 ```
 clinics
-  id, name, phone, timezone, created_at
+  id, name, phone, timezone, default_country, created_at
+  -- default_country: ISO 3166-1 alpha-2 (e.g. MX); default country code for
+  --   normalizing patient phones entered without a leading +
 
 users
   id, email, password_hash, name, is_super_admin, created_at
@@ -244,14 +246,20 @@ doctor_receptionist_grants
   id, clinic_id, doctor_id, receptionist_user_id, granted_at, revoked_at
 
 patients
-  id, clinic_id, name, phone, email, notes, created_at, updated_at
+  id, clinic_id, name, phone, phone_national, email, notes,
+  created_at, updated_at
   -- clinic-wide contact record; no clinical data
+  -- phone: canonical E.164 (with country code, e.g. +5215512345678)
+  -- phone_national: national significant number, digits only, no country code
+  --   (e.g. 5512345678) — the searchable column so the front desk can look a
+  --   patient up by local number without typing the country code
 
 appointments
   id, clinic_id, patient_id, doctor_id,
   start_at, end_at,
-  status (pending | confirmed | cancelled | no_show),
+  status (pending | confirmed | rescheduled | cancelled | no_show),
   notes, created_at, updated_at
+  -- rescheduled: time was moved to a replacement appointment
 
 -- Iteration 2
 reminders
@@ -274,10 +282,13 @@ reminders
 
 ## Open Questions
 
-1. Phone storage — normalize to E.164 for reliable search across formats?
+1. ~~Phone storage~~ **Resolved** — store canonical E.164 (`phone`) plus a
+   national-number column (`phone_national`) for search; numbers without a `+`
+   default to the clinic's `default_country` code.
 2. Double-booking — should v1 prevent booking a doctor into an occupied slot, or
    just warn?
-3. Reschedule history — full audit trail of moves, or just keep the latest time +
-   an `updated_at`?
+3. ~~Reschedule history~~ **Resolved (partial)** — a moved appointment is marked
+   `rescheduled` and a replacement appointment is created, preserving the
+   original. (A full audit table can be revisited if richer history is needed.)
 4. Should a doctor be able to belong to more than one clinic (works at two
    locations)?

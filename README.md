@@ -38,16 +38,29 @@ flask --app wsgi run --debug
 Visit <http://localhost:5000/health> — it returns `200` with
 `{"status": "ok", "database": "ok"}` when the app and database are healthy.
 
-### Quick Postgres via Docker
+### Postgres via Docker Compose
 
 ```bash
-docker run --name clinicremind-pg -e POSTGRES_USER=clinicremind \
-  -e POSTGRES_PASSWORD=clinicremind -e POSTGRES_DB=clinicremind \
-  -p 5432:5432 -d postgres:16
+docker compose up -d db
 ```
+
+This starts Postgres and, on first boot, creates two databases:
+`clinicremind` (development, matches `.env.example`) and `clinicremind_test`
+(used by integration tests). Stop it with `docker compose down` (add `-v` to
+also wipe the data volume).
 
 ## Tests
 
+The suite has two layers:
+
+* **Unit tests** — backed by in-memory SQLite, no external services.
+* **Integration tests** (`@pytest.mark.integration`) — backed by a real
+  Postgres, because they assert database-level guarantees (native enums,
+  partial indexes, foreign keys) that SQLite does not enforce. They read
+  `TEST_DATABASE_URL` and **skip** if no database is reachable.
+
 ```bash
-pytest
+pytest                          # everything (integration tests skip if no DB)
+pytest -m "not integration"     # unit tests only — fast, no database
+docker compose up -d db && pytest   # run the full suite, integration included
 ```

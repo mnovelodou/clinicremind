@@ -15,8 +15,9 @@ from alembic import context
 from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 
-# Import the shared metadata. Importing the models package (once it exists)
-# ensures every table is registered on db.metadata for autogenerate.
+# Import the shared metadata. Importing the models package registers every
+# table on db.metadata for autogenerate and upgrade.
+import app.models  # noqa: F401  (import for side effect: registers tables)
 from app.extensions import db
 
 config = context.config
