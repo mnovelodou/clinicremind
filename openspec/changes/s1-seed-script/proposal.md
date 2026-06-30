@@ -19,9 +19,9 @@ CRUD flows that have not been built yet.
 - Make the command **idempotent**: it upserts by stable natural keys (clinic
   name, user email, patient name+phone) so re-running never duplicates or
   corrupts data.
-- Add a **production guard**: the command aborts when the environment is
-  `production` unless an explicit `--force` flag is passed. Seeding is CLI-only
-  (no HTTP surface) and never wired into app startup.
+- Add an **unconditional production guard**: the command aborts whenever the
+  environment is `production`, with no flag or override to bypass it. Seeding is
+  CLI-only (no HTTP surface) and never wired into app startup.
 - Add `bcrypt` to `requirements.txt` (needed here and by AU1).
 
 ## Capabilities

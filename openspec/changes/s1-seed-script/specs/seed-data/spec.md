@@ -60,7 +60,8 @@ The seed SHALL create `users` for an admin, a doctor, and a receptionist, each
 with a bcrypt-hashed password and the corresponding `clinic_members` row(s)
 using valid `member_role` enum values. The seed SHALL create at least one
 `doctor_receptionist_grant` linking the receptionist user to a doctor. Plaintext
-passwords SHALL NOT be stored; only the bcrypt hash is persisted.
+passwords MUST NOT be stored under any circumstances; only the bcrypt hash is
+persisted.
 
 #### Scenario: Passwords are stored hashed
 
@@ -103,23 +104,18 @@ existing rows in place.
 
 ### Requirement: Production safety guard
 
-The seed command SHALL refuse to run when the application environment indicates
-production, unless an explicit `--force` flag is supplied. The guard SHALL be
-evaluated before any write occurs.
+The seed command SHALL refuse to run whenever the application environment
+indicates production. This guard is unconditional: there SHALL be no flag,
+option, or environment override that re-enables seeding in production. The guard
+SHALL be evaluated before any write occurs.
 
-#### Scenario: Blocked in production by default
+#### Scenario: Always blocked in production
 
-- **WHEN** `flask seed` is invoked while the environment is `production` and no
-  `--force` flag is given
-- **THEN** the command aborts with a non-zero exit, writes no data, and explains
-  that `--force` is required
-
-#### Scenario: Force overrides the guard
-
-- **WHEN** `flask seed --force` is invoked in a production environment
-- **THEN** the guard is bypassed and seeding proceeds
+- **WHEN** `flask seed` is invoked while the environment is `production`
+- **THEN** the command aborts with a non-zero exit and writes no data,
+  regardless of any flags or options supplied
 
 #### Scenario: Allowed outside production
 
 - **WHEN** `flask seed` is invoked while the environment is development or test
-- **THEN** the command proceeds without requiring `--force`
+- **THEN** the command proceeds and seeds the dataset

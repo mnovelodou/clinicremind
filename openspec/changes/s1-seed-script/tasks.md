@@ -2,7 +2,7 @@
 
 - [ ] 1.1 Add `bcrypt` (pinned) to `requirements.txt` and install it
 - [ ] 1.2 Document `APP_ENV` in `.env.example` (e.g. `development`), noting that
-      `production` blocks `flask seed` without `--force`
+      `production` unconditionally blocks `flask seed`
 
 ## 2. Helpers
 
@@ -20,9 +20,9 @@
       all five `appointment_status` values
 - [ ] 3.2 Implement idempotent upsert: look up each entity by its natural key and
       insert only when absent; wrap the run in one transaction
-- [ ] 3.3 Implement the production guard: abort (non-zero, no writes) when
-      `APP_ENV`/`FLASK_ENV` is `production` and `--force` is absent
-- [ ] 3.4 Register the `seed` command (with `--force`) on the app CLI in
+- [ ] 3.3 Implement the unconditional production guard: abort (non-zero, no
+      writes) whenever `APP_ENV`/`FLASK_ENV` is `production` — no override flag
+- [ ] 3.4 Register the `seed` command (no options) on the app CLI in
       `create_app`
 
 ## 4. Tests
@@ -32,8 +32,8 @@
       exists, passwords verify against the dev password and are not plaintext)
 - [ ] 4.2 Test idempotency: a second run leaves every seeded table's row count
       unchanged
-- [ ] 4.3 Test the production guard: blocked without `--force` when
-      `APP_ENV=production`, allowed with `--force`, allowed in dev/test
+- [ ] 4.3 Test the production guard: blocked (non-zero, no writes) when
+      `APP_ENV=production`, allowed in dev/test
 
 ## 5. Verify & document
 

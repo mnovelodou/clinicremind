@@ -24,8 +24,8 @@ chars, so it fits.
 **Non-Goals:**
 - No schema change and no Alembic migration (seed only reads/writes existing
   tables).
-- No Faker / random data, no configurable volume or CLI sizing flags beyond
-  `--force`.
+- No Faker / random data, no configurable volume or CLI sizing flags. The
+  command takes no options.
 - No iteration-2 data (reminders, WhatsApp, Google Calendar).
 - Not a production data-provisioning tool; it is a dev/demo fixture.
 
@@ -60,13 +60,15 @@ Existing rows are left untouched (no updates), so the command is a pure "fill
 the gaps" operation. The whole run is wrapped in a single transaction that
 commits at the end.
 
-### Production guard: env check before any write
+### Production guard: unconditional env check before any write
 Read the environment from `APP_ENV` (falling back to `FLASK_ENV`), treating the
 literal value `production` as protected; anything else (including unset) is
-allowed. If protected and `--force` was not passed, abort with a non-zero exit
-**before** opening the transaction. This keeps the guard independent of the
-existing `Config` (which has no env-name field today) and avoids accidental
-seeding of a prod database. Document `APP_ENV` in `.env.example`.
+allowed. If protected, abort with a non-zero exit **before** opening the
+transaction — there is no `--force` or any other override (per review: a
+fixture command must never be able to touch a production database). This keeps
+the guard independent of the existing `Config` (which has no env-name field
+today) and avoids accidental seeding of a prod database. Document `APP_ENV` in
+`.env.example`.
 
 ### Passwords: bcrypt via a small helper
 Add `bcrypt` (pinned) to `requirements.txt`. A `hash_password(plain)` helper
