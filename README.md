@@ -38,6 +38,26 @@ flask --app wsgi run --debug
 Visit <http://localhost:5000/health> — it returns `200` with
 `{"status": "ok", "database": "ok"}` when the app and database are healthy.
 
+### Seed sample data
+
+After migrations, load a fixed, deterministic sample dataset (one clinic, three
+doctors, fifteen patients, thirty appointments across the status lifecycle, plus
+admin/doctor/receptionist logins) for local development and demos:
+
+```bash
+flask --app wsgi seed
+```
+
+The command is **idempotent** — re-running it is a no-op, never a duplicate. It
+**refuses to run in production** (when `APP_ENV` or `FLASK_ENV` is `production`),
+with no override. Seeded logins all use the password `password`:
+
+| Email                          | Role         |
+|--------------------------------|--------------|
+| `admin@clinicremind.test`      | admin        |
+| `dr.reyes@clinicremind.test`   | doctor       |
+| `reception@clinicremind.test`  | receptionist |
+
 ### Postgres via Docker Compose
 
 ```bash

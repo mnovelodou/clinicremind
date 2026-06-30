@@ -37,4 +37,9 @@ def create_app(config_override: Optional[Mapping[str, Any]] = None) -> Flask:
 
     app.register_blueprint(routes_bp)
 
+    # CLI: `flask seed` populates deterministic sample data (dev/demo only).
+    from .seed import seed_command
+
+    app.cli.add_command(seed_command)
+
     return app
