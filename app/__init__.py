@@ -34,8 +34,10 @@ def create_app(config_override: Optional[Mapping[str, Any]] = None) -> Flask:
     from . import models  # noqa: F401
 
     from .routes import bp as routes_bp
+    from .patients import bp as patients_bp
 
     app.register_blueprint(routes_bp)
+    app.register_blueprint(patients_bp)
 
     # CLI: `flask seed` populates deterministic sample data (dev/demo only).
     from .seed import seed_command

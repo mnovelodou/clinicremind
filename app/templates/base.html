@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}ClinicRemind{% endblock %}</title>
+  <!-- HTMX via CDN — no JS build step (see CLAUDE.md conventions). -->
+  <script src="https://unpkg.com/htmx.org@2.0.3"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+    label { display: block; margin: 0.75rem 0 0.25rem; font-weight: 600; }
+    input, textarea { width: 100%; padding: 0.4rem; box-sizing: border-box; }
+    .error { color: #b00020; margin: 0.25rem 0 0; font-size: 0.9rem; }
+    .actions { margin-top: 1rem; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #ddd; }
+  </style>
+</head>
+<body>
+  {% block content %}{% endblock %}
+</body>
+</html>

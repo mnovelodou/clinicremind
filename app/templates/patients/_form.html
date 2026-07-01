@@ -1,0 +1,22 @@
+<form id="patient-form" hx-post="{{ action }}" hx-target="this" hx-swap="outerHTML">
+  <label for="name">Name</label>
+  <input id="name" name="name" value="{{ values.name }}" autofocus>
+  {% if errors.name %}<p class="error">{{ errors.name }}</p>{% endif %}
+
+  <label for="phone">Phone</label>
+  <input id="phone" name="phone" value="{{ values.phone }}" placeholder="55 1234 5678 or +1 415 555 0100">
+  {% if errors.phone %}<p class="error">{{ errors.phone }}</p>{% endif %}
+
+  <label for="email">Email</label>
+  <input id="email" name="email" type="email" value="{{ values.email }}">
+  {% if errors.email %}<p class="error">{{ errors.email }}</p>{% endif %}
+
+  <label for="notes">Notes</label>
+  <textarea id="notes" name="notes" rows="3">{{ values.notes }}</textarea>
+  {% if errors.notes %}<p class="error">{{ errors.notes }}</p>{% endif %}
+
+  <div class="actions">
+    <button type="submit">Save</button>
+    <a href="{{ url_for('patients.list_patients') }}">Cancel</a>
+  </div>
+</form>

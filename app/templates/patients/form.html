@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — ClinicRemind{% endblock %}
+{% block content %}
+  <h1>{{ title }}</h1>
+  {% include "patients/_form.html" %}
+{% endblock %}
