@@ -66,6 +66,29 @@ A task is done only when:
 - Early on, before Auth (AU) lands, features may run against a hardcoded
   single-clinic context. Once AU exists, every route must be scoped.
 
+## Code architecture & layering
+
+`app/` is **layered** — read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before
+adding or moving code there. Business logic must not be coupled to Flask, HTMX,
+or SQLAlchemy, so use cases stay reusable (future JSON API / mobile) and
+extractable. The flow is `routes → services → repositories → models`, with
+`schemas/` (DTOs), `mappers/` (model ↔ DTO), and `utils/` (stateless helpers).
+
+Non-negotiable rules:
+
+- **Routes** (`routes/`, one blueprint per module) hold **no business logic and
+  run no queries** — parse the request into a DTO, call one service, map the DTO
+  result or a domain exception to a response/template.
+- **Services** (`services/`) hold business logic and **expose only DTOs** — they
+  may receive models from repositories but must never return a SQLAlchemy model.
+  They raise domain exceptions (`services/exceptions.py`), never `abort()`/HTTP.
+- **Repositories** (`repositories/`) are the **only** place with SQLAlchemy
+  queries; they accept/return models and own the transaction boundary.
+- **Models** (`models/`) depend only on the ORM. **DTOs** (`schemas/`) and
+  **utils** (`utils/`) are framework-free (no Flask, no session).
+- Don't add loose utility or route modules at the `app/` root — put them in the
+  layer they belong to.
+
 ## When unsure
 
 If a task is ambiguous or an open question in PLAN.md blocks it, write the

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.phone import format_phone_input, normalize_phone
+from app.utils.phone import format_phone_input, normalize_phone
 
 
 def test_local_number_defaults_to_clinic_country():
