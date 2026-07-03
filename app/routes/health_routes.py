@@ -1,7 +1,7 @@
-"""Application routes.
+"""Health / index endpoint (app-foundation capability).
 
-For F1 this is just a health/index endpoint that proves the app boots and can
-reach the database. Domain routes arrive in later tasks.
+Proves the app boots and can reach the database. Domain routes live in their own
+blueprints (e.g. ``patient_routes``).
 """
 
 from __future__ import annotations
@@ -10,9 +10,9 @@ from flask import Blueprint, jsonify
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from .extensions import db
+from app.extensions import db
 
-bp = Blueprint("main", __name__)
+bp = Blueprint("health", __name__)
 
 
 @bp.route("/")

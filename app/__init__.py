@@ -33,9 +33,18 @@ def create_app(config_override: Optional[Mapping[str, Any]] = None) -> Flask:
     # Import models so every table is registered on db.metadata.
     from . import models  # noqa: F401
 
-    from .routes import bp as routes_bp
+    # One blueprint per delivery module (see app/routes/). Layering:
+    # routes → services → repositories → models (docs/ARCHITECTURE.md).
+    from .routes.health_routes import bp as health_bp
+    from .routes.patient_routes import bp as patients_bp
 
-    app.register_blueprint(routes_bp)
+    app.register_blueprint(health_bp)
+    app.register_blueprint(patients_bp)
+
+    # App-wide handlers turn domain/uncaught errors into HTTP responses.
+    from .error_handlers import register_error_handlers
+
+    register_error_handlers(app)
 
     # CLI: `flask seed` populates deterministic sample data (dev/demo only).
     from .seed import seed_command

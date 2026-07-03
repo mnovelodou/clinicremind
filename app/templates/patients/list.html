@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Patients — ClinicRemind{% endblock %}
+{% block content %}
+  <h1>Patients</h1>
+  <p><a href="{{ url_for('patients.new') }}">+ New patient</a></p>
+  {% if patients %}
+    <table class="data-table">
+
+      <thead>
+        <tr><th>Name</th><th>Phone</th><th>Email</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for patient in patients %}
+          <tr>
+            <td>{{ patient.name }}</td>
+            <td>{{ patient.phone_e164 or "" }}</td>
+            <td>{{ patient.email or "" }}</td>
+            <td><a href="{{ url_for('patients.edit', patient_id=patient.id) }}">Edit</a></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No patients yet.</p>
+  {% endif %}
+{% endblock %}

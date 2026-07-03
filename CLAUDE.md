@@ -66,6 +66,46 @@ A task is done only when:
 - Early on, before Auth (AU) lands, features may run against a hardcoded
   single-clinic context. Once AU exists, every route must be scoped.
 
+## Code architecture & layering
+
+`app/` is **layered** — read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before
+adding or moving code there. Business logic must not be coupled to Flask, HTMX,
+or SQLAlchemy, so use cases stay reusable (future JSON API / mobile) and
+extractable. The flow is `routes → services → repositories → models`, with
+`schemas/` (DTOs), `mappers/` (model ↔ DTO), and `utils/` (stateless helpers).
+
+Non-negotiable rules:
+
+- **Routes** (`routes/`, one blueprint per module) hold **no business logic and
+  run no queries** — parse the request into a DTO, call one service, map the DTO
+  result or a domain exception to a response/template.
+- **Services** (`services/`) hold business logic and **expose only DTOs** — they
+  may receive models from repositories but must never return a SQLAlchemy model.
+  They raise domain exceptions (`services/exceptions.py`), never `abort()`/HTTP.
+- **Repositories** (`repositories/`) are the **only** place with SQLAlchemy
+  queries; they accept/return models and own the transaction boundary.
+- **Models** (`models/`) depend only on the ORM. **DTOs** (`schemas/`) and
+  **utils** (`utils/`) are framework-free (no Flask, no session).
+- Don't add loose utility or route modules at the `app/` root — put them in the
+  layer they belong to.
+
+**Naming (keep it consistent):**
+
+- Every DTO class ends in `DTO` (`PatientDTO`, `ClinicDTO`). Write-side input
+  DTOs are `Create<X>DTO` / `Update<X>DTO`.
+- Services accept **DTOs, never framework input** — no `request`/`FormData` in a
+  service signature. Form objects (e.g. `PatientFormData`) are an **HTML-form,
+  routes-layer** concern: the route parses `request.form` into the form object,
+  then translates it into a `Create<X>DTO` / `Update<X>DTO` before calling the
+  service. A different delivery layer (a JSON REST endpoint) builds those DTOs
+  directly and never touches the form object, so the service is reused as-is.
+- Mapper functions are `to_<x>_dto` (model → DTO) and `to_model` / `apply_fields`
+  (validated data → model). Repositories accept and return **model objects**
+  (e.g. `create(patient)`), not loose column kwargs.
+- Infra failures surface as domain exceptions: repositories may raise
+  `SQLAlchemyError`; services catch it and raise `PersistenceError`; app-wide
+  handlers (`app/error_handlers.py`) turn domain/uncaught errors into responses.
+
 ## When unsure
 
 If a task is ambiguous or an open question in PLAN.md blocks it, write the
