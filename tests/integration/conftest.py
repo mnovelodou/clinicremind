@@ -97,3 +97,37 @@ def pg_app(pg_engine):
 @pytest.fixture
 def pg_client(pg_app):
     return pg_app.test_client()
+
+
+@pytest.fixture
+def make_clinic(pg_app):
+    """Factory that creates clinics on the app session and cleans up only its own.
+
+    Teardown deletes exactly the clinics this factory created (and their
+    patients) by id — never a blanket ``DELETE`` — so tests stay independent of
+    each other within the session-scoped schema.
+    """
+    from app.extensions import db
+    from app.models import Clinic, Patient
+
+    created_ids: list[int] = []
+
+    def _make(name: str = "Test Clinic", default_country: str = "MX") -> Clinic:
+        clinic = Clinic(
+            name=name, timezone="America/Mexico_City", default_country=default_country
+        )
+        db.session.add(clinic)
+        db.session.commit()
+        created_ids.append(clinic.id)
+        return clinic
+
+    yield _make
+
+    if created_ids:
+        db.session.query(Patient).filter(
+            Patient.clinic_id.in_(created_ids)
+        ).delete(synchronize_session=False)
+        db.session.query(Clinic).filter(
+            Clinic.id.in_(created_ids)
+        ).delete(synchronize_session=False)
+        db.session.commit()

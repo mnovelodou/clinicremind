@@ -25,3 +25,15 @@ class PatientNotFound(Exception):
     def __init__(self, patient_id: int) -> None:
         super().__init__(f"Patient {patient_id} not found in this clinic")
         self.patient_id = patient_id
+
+
+class PersistenceError(Exception):
+    """A repository/database operation failed.
+
+    Services raise this after catching a low-level ``SQLAlchemyError`` so callers
+    depend on a domain-level failure, not on SQLAlchemy. The original error is
+    kept as ``__cause__`` for logging.
+    """
+
+    def __init__(self, message: str = "A database error occurred") -> None:
+        super().__init__(message)

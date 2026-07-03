@@ -4,7 +4,8 @@
   <h1>Patients</h1>
   <p><a href="{{ url_for('patients.new') }}">+ New patient</a></p>
   {% if patients %}
-    <table>
+    <table class="data-table">
+
       <thead>
         <tr><th>Name</th><th>Phone</th><th>Email</th><th></th></tr>
       </thead>

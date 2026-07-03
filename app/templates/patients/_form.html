@@ -1,4 +1,7 @@
-<form id="patient-form" hx-post="{{ action }}" hx-target="this" hx-swap="outerHTML">
+<!-- Native method/action work without JS; HTMX enhances the same endpoint when
+     the CDN script loads (see hx-* below). Progressive enhancement. -->
+<form id="patient-form" method="post" action="{{ action }}"
+      hx-post="{{ action }}" hx-target="this" hx-swap="outerHTML">
   <label for="name">Name</label>
   <input id="name" name="name" value="{{ values.name }}" autofocus>
   {% if errors.name %}<p class="error">{{ errors.name }}</p>{% endif %}

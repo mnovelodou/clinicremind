@@ -89,6 +89,21 @@ Non-negotiable rules:
 - Don't add loose utility or route modules at the `app/` root — put them in the
   layer they belong to.
 
+**Naming (keep it consistent):**
+
+- Every DTO class ends in `DTO` (`PatientDTO`, `ClinicDTO`). Write-side input
+  DTOs are `Create<X>DTO` / `Update<X>DTO`.
+- Services accept **DTOs, never framework input** — no `request`/`FormData` in a
+  service signature. Routes translate the request into a DTO (a
+  `from_mapping(...)` on the DTO) before calling the service, so a future REST
+  endpoint reuses the same service unchanged.
+- Mapper functions are `to_<x>_dto` (model → DTO) and `to_model` / `apply_fields`
+  (validated data → model). Repositories accept and return **model objects**
+  (e.g. `create(patient)`), not loose column kwargs.
+- Infra failures surface as domain exceptions: repositories may raise
+  `SQLAlchemyError`; services catch it and raise `PersistenceError`; app-wide
+  handlers (`app/error_handlers.py`) turn domain/uncaught errors into responses.
+
 ## When unsure
 
 If a task is ambiguous or an open question in PLAN.md blocks it, write the

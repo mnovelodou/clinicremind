@@ -11,14 +11,18 @@ enforced conventions, not suggestions.
 
 ## Layers
 
-Data flows **inward on the way down, DTOs on the way up**:
+Data flows **inward on the way down, DTOs on the way up**. The delivery layer
+owns framework-specific input: a route reads `FormData`/`request` (a REST
+endpoint would read a JSON body) and **translates it into a DTO** before calling
+a service. Services only ever see DTOs — so the same service backs an HTMX form
+today and a REST endpoint tomorrow with no change.
 
 ```
-HTTP request
+HTTP request  (FormData / JSON)
    │
    ▼
-routes/        controllers — parse request → DTO, call a service, render/respond
-   │  (DTOs in, DTOs out)
+routes/        controllers — translate request → DTO, call a service, render/respond
+   │  (DTOs in, DTOs out)         (FormData stops here)
    ▼
 services/      business logic / use cases — validation, orchestration
    │  (models in from repos, DTOs out to routes)
@@ -75,6 +79,17 @@ context.py     request-scoped context (current clinic) — returns a DTO
 6. **One blueprint per module in `routes/`,** registered in the app factory
    (`app/__init__.py`).
 
+7. **Naming.** DTO classes end in `DTO`; write-side input is `Create<X>DTO` /
+   `Update<X>DTO`. Mapper functions are `to_<x>_dto` (model → DTO) and
+   `to_model` / `apply_fields` (validated data → model). Repositories accept and
+   return **models** (`create(patient)`), not loose kwargs.
+
+8. **Error handling.** Repositories may raise `SQLAlchemyError`; services catch
+   it and raise `PersistenceError` (a domain exception). App-wide handlers in
+   `app/error_handlers.py` render domain/uncaught errors as HTTP responses, so
+   routes only handle the domain exceptions that are normal control flow
+   (`ValidationError`, `PatientNotFound`).
+
 ## Why this shape
 
 - **Reuse across delivery mechanisms** — the same `PatientService` can back an
@@ -94,13 +109,15 @@ context.py     request-scoped context (current clinic) — returns a DTO
 | `services/exceptions.py`                | domain exceptions |
 | `repositories/patient_repository.py`    | queries     |
 | `models/patient.py`                     | ORM model   |
-| `schemas/patient_dto.py`                | `PatientFormData` (in), `PatientDTO` (out) |
+| `schemas/patient_dto.py`                | `CreatePatientDTO`/`UpdatePatientDTO` (in), `PatientDTO` (out) |
 | `mappers/patient_mapper.py`             | model ↔ DTO |
 | `utils/phone.py`                        | phone normalization |
 
-A create request flows: `patient_routes.create` builds `PatientFormData` from
+A create request flows: `patient_routes.create` builds a `CreatePatientDTO` from
 `request.form` and reads the clinic from `context.current_clinic()` →
 `PatientService.create` validates (`build_patient_fields`), normalizes the phone
-(`utils/phone`), and asks `PatientRepository.create` to persist → the returned
-model is mapped to a `PatientDTO`. On bad input the service raises
-`ValidationError`; the route catches it and re-renders the form fragment.
+(`utils/phone`), builds a `Patient` model via `patient_mapper.to_model`, and asks
+`PatientRepository.create(patient)` to persist → the returned model is mapped to
+a `PatientDTO` via `to_patient_dto`. On bad input the service raises
+`ValidationError` and the route re-renders the form fragment; on a DB failure it
+raises `PersistenceError`, handled app-wide.

@@ -41,6 +41,11 @@ def create_app(config_override: Optional[Mapping[str, Any]] = None) -> Flask:
     app.register_blueprint(health_bp)
     app.register_blueprint(patients_bp)
 
+    # App-wide handlers turn domain/uncaught errors into HTTP responses.
+    from .error_handlers import register_error_handlers
+
+    register_error_handlers(app)
+
     # CLI: `flask seed` populates deterministic sample data (dev/demo only).
     from .seed import seed_command
 

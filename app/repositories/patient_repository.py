@@ -6,6 +6,11 @@ from sqlalchemy.orm import Session
 
 from app.models import Patient
 
+# Safety cap so the list query is never unbounded. Real paginated/searchable
+# listing is P2 (patient search); this just prevents an accidental full-table
+# fetch in the P1 landing list.
+DEFAULT_LIST_LIMIT = 100
+
 
 class PatientRepository:
     """Clinic-scoped data access for ``Patient`` rows.
@@ -17,12 +22,16 @@ class PatientRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def list_for_clinic(self, clinic_id: int) -> list[Patient]:
-        """All patients in a clinic, ordered by name."""
+    def list_for_clinic(
+        self, clinic_id: int, *, limit: int = DEFAULT_LIST_LIMIT, offset: int = 0
+    ) -> list[Patient]:
+        """Patients in a clinic, ordered by name, bounded by ``limit``."""
         return (
             self._session.query(Patient)
             .filter_by(clinic_id=clinic_id)
             .order_by(Patient.name)
+            .limit(limit)
+            .offset(offset)
             .all()
         )
 
@@ -34,25 +43,8 @@ class PatientRepository:
             .first()
         )
 
-    def create(
-        self,
-        *,
-        clinic_id: int,
-        name: str,
-        country_code: str | None,
-        phone_national: str | None,
-        email: str | None,
-        notes: str | None,
-    ) -> Patient:
+    def create(self, patient: Patient) -> Patient:
         """Insert and commit a new patient, returning the persisted model."""
-        patient = Patient(
-            clinic_id=clinic_id,
-            name=name,
-            country_code=country_code,
-            phone_national=phone_national,
-            email=email,
-            notes=notes,
-        )
         self._session.add(patient)
         self._session.commit()
         return patient

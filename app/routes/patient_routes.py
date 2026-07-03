@@ -1,6 +1,7 @@
 """Patient create/edit routes (patient-management capability, P1).
 
-Controller only: parse the request into a ``PatientFormData``, resolve the
+Controller only: translate the request into a write DTO (``CreatePatientDTO`` /
+``UpdatePatientDTO``), resolve the
 current clinic, delegate to ``PatientService``, and turn the result — a
 ``PatientDTO`` or a domain exception — into a response. No business logic, no
 queries here.
@@ -18,7 +19,7 @@ from flask import Blueprint, abort, make_response, render_template, request, url
 from app.context import current_clinic
 from app.extensions import db
 from app.repositories.patient_repository import PatientRepository
-from app.schemas.patient_dto import PatientFormData
+from app.schemas.patient_dto import CreatePatientDTO, UpdatePatientDTO
 from app.services.exceptions import PatientNotFound, ValidationError
 from app.services.patient_service import PatientService
 
@@ -52,7 +53,7 @@ def new():
         "patients/form.html",
         title="New patient",
         action=url_for("patients.create"),
-        values=PatientFormData(),
+        values=CreatePatientDTO(),
         errors={},
     )
 
@@ -61,7 +62,7 @@ def new():
 def create():
     """Create a patient scoped to the current clinic."""
     clinic = current_clinic()
-    form = PatientFormData.from_mapping(request.form)
+    form = CreatePatientDTO.from_mapping(request.form)
     try:
         _service().create(clinic.id, form, clinic.default_country)
     except ValidationError as exc:
@@ -85,7 +86,7 @@ def edit(patient_id: int):
         patient = _service().get_for_edit(clinic.id, patient_id)
     except PatientNotFound:
         abort(404)
-    values = PatientFormData(
+    values = UpdatePatientDTO(
         name=patient.name,
         phone=patient.phone_display,
         email=patient.email or "",
@@ -104,7 +105,7 @@ def edit(patient_id: int):
 def update(patient_id: int):
     """Persist changes to an existing clinic patient."""
     clinic = current_clinic()
-    form = PatientFormData.from_mapping(request.form)
+    form = UpdatePatientDTO.from_mapping(request.form)
     try:
         _service().update(clinic.id, patient_id, form, clinic.default_country)
     except PatientNotFound:

@@ -36,6 +36,7 @@ details live in [PLAN.md](PLAN.md).
 | G3 | Google Calendar: one-time onboarding import | Iteration 2 | D1 | todo | |
 | X1 | Dashboard: tomorrow's appointments + confirmation status | Iteration 2 | R1 | todo | |
 | X2 | Follow-up view: cancellations + non-responders | Iteration 2 | R1 | todo | |
+| L1 | Internationalization: English + Spanish UI strings (Flask-Babel, locale selection) | Platform | P1 | todo | |
 
 ## Notes
 - IDs match the track letters in PLAN.md's dependency graph.
