@@ -12,17 +12,19 @@ enforced conventions, not suggestions.
 ## Layers
 
 Data flows **inward on the way down, DTOs on the way up**. The delivery layer
-owns framework-specific input: a route reads `FormData`/`request` (a REST
-endpoint would read a JSON body) and **translates it into a DTO** before calling
-a service. Services only ever see DTOs — so the same service backs an HTMX form
-today and a REST endpoint tomorrow with no change.
+owns framework-specific input: a route parses `request.form` into a **form
+object** (`PatientFormData`, an HTML-form concept that lives in `routes/`) and
+**translates it into an input DTO** (`CreatePatientDTO` / `UpdatePatientDTO`)
+before calling a service. Services only ever see DTOs — so the same service backs
+an HTMX form today and a REST endpoint tomorrow (which builds the DTO straight
+from JSON, no form object) with no change.
 
 ```
 HTTP request  (FormData / JSON)
    │
    ▼
-routes/        controllers — translate request → DTO, call a service, render/respond
-   │  (DTOs in, DTOs out)         (FormData stops here)
+routes/        controllers — parse request → form object → input DTO, call a service
+   │  (DTOs in, DTOs out)         (FormData / PatientFormData stops here)
    ▼
 services/      business logic / use cases — validation, orchestration
    │  (models in from repos, DTOs out to routes)
@@ -42,7 +44,7 @@ context.py     request-scoped context (current clinic) — returns a DTO
 
 | Directory / file      | Responsibility                                              | May import |
 |-----------------------|-------------------------------------------------------------|------------|
-| `routes/`             | HTTP: request→DTO, call service, build response/template    | services, schemas, context, extensions |
+| `routes/`             | HTTP: parse request → form object → input DTO, call service, build response. Owns HTML-form objects (`PatientFormData`). | services, schemas, context, extensions |
 | `services/`           | Business logic / use cases; raises domain exceptions        | repositories, mappers, schemas, utils |
 | `repositories/`       | SQLAlchemy queries for one aggregate                        | models, extensions |
 | `models/`             | ORM models / table definitions                              | extensions |
@@ -105,6 +107,7 @@ context.py     request-scoped context (current clinic) — returns a DTO
 | File                                    | Layer       |
 |-----------------------------------------|-------------|
 | `routes/patient_routes.py`              | controller  |
+| `routes/patient_forms.py`               | `PatientFormData` — HTML-form object |
 | `services/patient_service.py`           | use cases + validation |
 | `services/exceptions.py`                | domain exceptions |
 | `repositories/patient_repository.py`    | queries     |
@@ -113,11 +116,11 @@ context.py     request-scoped context (current clinic) — returns a DTO
 | `mappers/patient_mapper.py`             | model ↔ DTO |
 | `utils/phone.py`                        | phone normalization |
 
-A create request flows: `patient_routes.create` builds a `CreatePatientDTO` from
-`request.form` and reads the clinic from `context.current_clinic()` →
-`PatientService.create` validates (`build_patient_fields`), normalizes the phone
-(`utils/phone`), builds a `Patient` model via `patient_mapper.to_model`, and asks
-`PatientRepository.create(patient)` to persist → the returned model is mapped to
-a `PatientDTO` via `to_patient_dto`. On bad input the service raises
-`ValidationError` and the route re-renders the form fragment; on a DB failure it
-raises `PersistenceError`, handled app-wide.
+A create request flows: `patient_routes.create` parses `request.form` into a
+`PatientFormData`, calls `.to_create_dto()` to get a `CreatePatientDTO`, and reads
+the clinic from `context.current_clinic()` → `PatientService.create` validates
+(`build_patient_fields`), normalizes the phone (`utils/phone`), builds a `Patient`
+model via `patient_mapper.to_model`, and asks `PatientRepository.create(patient)`
+to persist → the returned model is mapped to a `PatientDTO` via `to_patient_dto`.
+On bad input the service raises `ValidationError` and the route re-renders the
+form fragment; on a DB failure it raises `PersistenceError`, handled app-wide.

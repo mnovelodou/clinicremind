@@ -94,9 +94,11 @@ Non-negotiable rules:
 - Every DTO class ends in `DTO` (`PatientDTO`, `ClinicDTO`). Write-side input
   DTOs are `Create<X>DTO` / `Update<X>DTO`.
 - Services accept **DTOs, never framework input** — no `request`/`FormData` in a
-  service signature. Routes translate the request into a DTO (a
-  `from_mapping(...)` on the DTO) before calling the service, so a future REST
-  endpoint reuses the same service unchanged.
+  service signature. Form objects (e.g. `PatientFormData`) are an **HTML-form,
+  routes-layer** concern: the route parses `request.form` into the form object,
+  then translates it into a `Create<X>DTO` / `Update<X>DTO` before calling the
+  service. A different delivery layer (a JSON REST endpoint) builds those DTOs
+  directly and never touches the form object, so the service is reused as-is.
 - Mapper functions are `to_<x>_dto` (model → DTO) and `to_model` / `apply_fields`
   (validated data → model). Repositories accept and return **model objects**
   (e.g. `create(patient)`), not loose column kwargs.

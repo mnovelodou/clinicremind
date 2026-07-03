@@ -15,12 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.mappers import patient_mapper
 from app.repositories.patient_repository import PatientRepository
-from app.schemas.patient_dto import (
-    CreatePatientDTO,
-    PatientDTO,
-    PatientWriteDTO,
-    UpdatePatientDTO,
-)
+from app.schemas.patient_dto import CreatePatientDTO, PatientDTO, UpdatePatientDTO
 from app.services.exceptions import PatientNotFound, PersistenceError, ValidationError
 from app.utils.phone import normalize_phone
 
@@ -30,9 +25,9 @@ _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 def build_patient_fields(
-    data: PatientWriteDTO, default_country: str | None
+    data: CreatePatientDTO | UpdatePatientDTO, default_country: str | None
 ) -> tuple[dict, dict]:
-    """Validate + normalize a write DTO into persistence-ready fields.
+    """Validate + normalize a create/update input DTO into persistence-ready fields.
 
     Pure function (no I/O): returns ``(fields, errors)`` where ``fields`` are the
     normalized column values and ``errors`` maps field → message. When ``errors``

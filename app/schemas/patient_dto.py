@@ -1,51 +1,42 @@
-"""Patient DTOs — the patient shapes exposed across layer boundaries.
+"""Patient DTOs — the patient shapes the service layer speaks.
 
-Naming: every DTO ends in ``DTO``. Write-side input DTOs are ``CreatePatientDTO``
-/ ``UpdatePatientDTO`` (what a caller submits); ``PatientDTO`` is the read-side
-shape returned to callers. Routes translate framework-specific input (an HTMX
-form, later a JSON body) into these DTOs before calling a service — services
-never see ``request``/``FormData``.
+These are the service's input/output language, independent of any transport. A
+route builds a ``CreatePatientDTO`` from an HTML form; a future REST endpoint
+would build the same DTO from a JSON body — the service neither knows nor cares
+which. (The HTML-form-specific representation, ``PatientFormData``, lives in the
+routes layer, not here.)
+
+Naming: input DTOs are ``Create<X>DTO`` / ``Update<X>DTO``; the read-side shape
+returned to callers is ``<X>DTO``.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping
 
 
 @dataclass(frozen=True)
-class PatientWriteDTO:
-    """Base for patient write input — raw, unvalidated field values.
-
-    Values are stripped of surrounding whitespace on construction. Concrete
-    ``CreatePatientDTO`` / ``UpdatePatientDTO`` distinguish intent at the type
-    level (and can diverge later without churning call sites).
-    """
+class CreatePatientDTO:
+    """What the service needs to create a patient (raw, pre-validation)."""
 
     name: str = ""
     phone: str = ""
     email: str = ""
     notes: str = ""
 
-    @classmethod
-    def from_mapping(cls, data: Mapping[str, str]) -> "PatientWriteDTO":
-        """Build from any string mapping (e.g. ``request.form`` or parsed JSON)."""
-        return cls(
-            name=(data.get("name") or "").strip(),
-            phone=(data.get("phone") or "").strip(),
-            email=(data.get("email") or "").strip(),
-            notes=(data.get("notes") or "").strip(),
-        )
-
 
 @dataclass(frozen=True)
-class CreatePatientDTO(PatientWriteDTO):
-    """Input to create a patient."""
+class UpdatePatientDTO:
+    """What the service needs to update a patient (raw, pre-validation).
 
+    A distinct type from ``CreatePatientDTO`` so create/update inputs can diverge
+    later without touching call sites.
+    """
 
-@dataclass(frozen=True)
-class UpdatePatientDTO(PatientWriteDTO):
-    """Input to update an existing patient."""
+    name: str = ""
+    phone: str = ""
+    email: str = ""
+    notes: str = ""
 
 
 @dataclass(frozen=True)
